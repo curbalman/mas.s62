@@ -152,8 +152,8 @@ func (b Block) IsPreimage(arg Block) bool {
 	return b.Hash() == arg
 }
 
-func (b Block) BitAt(index int) bool {
-	return (b[index/8] >> (7 - index%8)) != 0
+func (b Block) BitAt(index int) int {
+	return int((b[index/8] >> (7 - index%8)) & 0x01)
 }
 
 // BlockFromByteSlice returns a block from a variable length byte slice.
@@ -181,7 +181,7 @@ func (sig Signature) ToHex() string {
 	return s
 }
 
-func (sig Signature) BitAt(index int) bool {
+func (sig Signature) BitAt(index int) int {
 	return sig.Preimage[index/(32*8)].BitAt(index % (32 * 8))
 }
 
@@ -249,10 +249,12 @@ func Sign(msg Message, sec SecretKey) Signature {
 	// Your code here
 	// ===
 	for i := 0; i < 256; i++ {
-		if Block(msg).BitAt(i) {
+		if Block(msg).BitAt(i) == 1 {
 			sig.Preimage[i] = sec.OnePre[i]
-		} else {
+		} else if Block(msg).BitAt(i) == 0 {
 			sig.Preimage[i] = sec.ZeroPre[i]
+		} else {
+			panic("BitAt error in Sign")
 		}
 	}
 	// ===
@@ -267,14 +269,17 @@ func Verify(msg Message, pub PublicKey, sig Signature) bool {
 	// ===
 	// convert message into a block
 	for i := 0; i < 256; i++ {
-		if Block(msg).BitAt(i) {
+		if Block(msg).BitAt(i) == 1 {
 			if !sig.Preimage[i].IsPreimage(pub.OneHash[i]) {
+				fmt.Printf("Verify: failed, bit %v (%v)\n", i, Block(msg).BitAt(i))
 				return false
 			}
-		} else {
+		} else if Block(msg).BitAt(i) == 0 {
 			if !sig.Preimage[i].IsPreimage(pub.ZeroHash[i]) {
 				return false
 			}
+		} else {
+			panic("BitAt error in Verify")
 		}
 	}
 	// ===
