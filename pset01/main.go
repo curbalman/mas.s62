@@ -271,7 +271,6 @@ func Verify(msg Message, pub PublicKey, sig Signature) bool {
 	for i := 0; i < 256; i++ {
 		if Block(msg).BitAt(i) == 1 {
 			if !sig.Preimage[i].IsPreimage(pub.OneHash[i]) {
-				fmt.Printf("Verify: failed, bit %v (%v)\n", i, Block(msg).BitAt(i))
 				return false
 			}
 		} else if Block(msg).BitAt(i) == 0 {

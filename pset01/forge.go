@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
+)
 
 /*
 A note about the provided keys and signatures:
@@ -119,17 +123,97 @@ func Forge() (string, Signature, error) {
 	fmt.Printf("ok 3: %v\n", Verify(msgslice[2], pub, sig3))
 	fmt.Printf("ok 4: %v\n", Verify(msgslice[3], pub, sig4))
 
-	msgString := "my forged message"
+	msgString := "forge by curbalman"
 	var sig Signature
+	var textForged string
 
 	// your code here!
 	// ==
 	// Geordi La
+	sec, constrains := setConstrains(msgslice, sigslice)
+	labels := []string{" 0 ", " 1 ", " 2 ", " 3 ", " 4 ", " 5 ", " 6 ", " 7 ", " 8 ", " 9 ", " A ", " B ", " C ", " D ", " E ", " F "}
+	findAny := false
+	for _, label := range labels {
+		var err error
+		textForged, err = forgeBatch(msgString+label, 32, constrains)
+		if err == nil {
+			findAny = true
+			break
+		}
+	}
+	if findAny {
+		sig = Sign(GetMessageFromString(textForged), sec)
+		return textForged, sig, nil
+	} else {
+		return textForged, sig, errors.New("fail")
+	}
 	// ==
-
-	return msgString, sig, nil
 
 }
 
 // hint:
 // arr[i/8]>>(7-(i%8)))&0x01
+
+func setConstrains(msgslice []Message, sigslice []Signature) (SecretKey, [256]int) {
+	var constrains [256]int
+	var sec SecretKey
+	for im, msg := range msgslice {
+		for ib := 0; ib < 256; ib++ {
+			switch b := Block(msg).BitAt(ib); b {
+			case 0:
+				constrains[ib] |= 0b01
+				sec.ZeroPre[ib] = sigslice[im].Preimage[ib]
+			case 1:
+				constrains[ib] |= 0b10
+				sec.OnePre[ib] = sigslice[im].Preimage[ib]
+			default:
+				panic("Illegal bit value")
+			}
+
+		}
+	}
+	return sec, constrains
+}
+
+func forgeBatch(prefix string, numChar int, constrains [256]int) (string, error) {
+	text := append([]byte(prefix), make([]byte, numChar)...)
+	si := len(prefix)
+	for i := si; i < si+numChar; i++ {
+		text[i] = '0'
+	}
+	for {
+		var msg Message = sha256.Sum256(text)
+		if checkMsg(msg, constrains) {
+			return string(text), nil
+		}
+		if nextMsg(text, si) {
+			return "", errors.New("fail")
+		}
+	}
+}
+
+func checkMsg(msg Message, constrains [256]int) bool {
+	for i := 0; i < 256; i++ {
+		b := Block(msg).BitAt(i)
+		if constrains[i]&(0b01<<b) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+var nextChar = [71]byte{'0': '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'A': 'B', 'C', 'D', 'E', 'F', '0'}
+
+func nextMsg(text []byte, startIndex int) bool {
+	for {
+		text[startIndex] = nextChar[text[startIndex]]
+		if text[startIndex] == '0' {
+			if startIndex == len(text)-1 {
+				return true
+			}
+			startIndex++
+		} else {
+			return false
+		}
+	}
+}
